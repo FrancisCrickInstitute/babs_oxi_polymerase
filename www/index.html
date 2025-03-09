@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="lib/bootstrap.min.css" >
+    <link rel="stylesheet" href="lib/bootstrap-tourist.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <title>Damage Repair Simulation</title>
+    <style>
+     .exit {
+	 fill: brown;
+     }
+     .active_damage {
+	 fill: red;
+     }
+     .repaired_damage {
+	 fill: green;
+     }
+     .pol_movie {
+	 fill: none;
+	 stroke-width: 2px;
+     }
+     .pol_path {
+	 fill: none;
+	 stroke-width: 2px;
+     }
+     .tour-backdrop {
+	 opacity: 0.6;
+     }
+    </style>
+  </head>
+  <body>
+    <div class="modal fade" id="waitModal" tabindex="-1" role="dialog" aria-labelledby="waitModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+	<div class="modal-content">
+	  <div class="modal-header">
+            <h5 class="modal-title" id="waitModalLabel">Please wait</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+	  </div>
+	  <div class="modal-body">
+            <p id="waitText">The first page is being loaded with our default settings, and the visualisation is being downloaded</p>
+	  </div>
+	</div>
+      </div>
+    </div>
+    <div class="container-fluid" >
+      <h1 class="display-3 p-3 border"  style="background-color:#82c9f0;">
+	Transcription during DNA Damage Simulation
+	<button type="button" class="btn btn-info btn-lg" id="tour-button" onclick="tour.restart()">Click for a guided tour</button></h1>
+      <div class="progress"><div class="progress-bar"></div></div>
+      <ul class="nav nav-tabs" role="tablist" >
+	<li class="nav-item">
+	  <a class="nav-link active" href="#main"  data-toggle="tab" role="tab" id="main_tab">Main</a>
+	</li>
+	<li class="nav-item">
+	  <a class="nav-link" href="#scenarios" data-toggle="tab" role="tab" id="scenarios_tab" >Scenarios</a>
+	</li>
+	<li class="nav-item">
+	  <a class="nav-link" href="#genes" data-toggle="tab" role="tab" id="genes_tab" >Genes</a>
+	</li>
+	<li class="nav-item">
+	  <a class="nav-link" href="#recalculate" data-toggle="tab" role="tab" id="recalculate_tab">Recalculate</a>
+	</li>
+      </ul>
+      <div class="tab-content">
+	<div id="main" class="tab-pane active show" role="tabpanel">
+	  <div class="row">
+	    <div class="col-xl-7">
+	      <select class="form-control" id="cartoon_selector"><option value="Example">Example Cartoon</option></select>
+	      <svg width="758" height="400" id="cartoon"></svg>
+	      <svg width="500" height="400" id="movie"></svg>
+	      <div class="form-group">
+		<input type="range" class="form-control-range" id="time_slider" onchange="set_time(this.value)">
+		<p id="timer"></p>
+	      </div>
+	      <table class="table table-sm" id="repair_stats_table">
+		<thead>
+		  <tr><th>Site</th><th>Repair Time</th></tr>
+		</thead>
+		<tbody id="repair"></tbody>
+	      </table>
+	    </div>
+	    <div class="col-xl-5">
+	      <form id="params_form"></form>
+	      <!-- <table class="table table-sm">
+		   <thead>
+		   <tr><th>Parameter</th><th>Value</th></tr>
+		   </thead>
+		   <tbody id="params"></tbody>
+		   </table> -->
+	    </div>
+	  </div>
+	</div>
+	<div id="scenarios"  class="tab-pane" role="tabpanel">
+	  <div id="scene-cards" class="row"></div>
+	  <div id="scene-footer" class="row p-2 d-flex justify-content-between">
+	    <button id="add-scene" type="button" class="btn btn-primary">Add Scenario</button>
+	  </div>
+	</div>
+	<div id="genes"  class="tab-pane" role="tabpanel">
+	  <div id="gene-cards" class="row"></div>
+	  <div id="gene-footer" class="row p-2  d-flex justify-content-between">
+	    <button id="add-gene" type="button" class="btn btn-primary">Add Gene</button>
+	  </div>
+	</div>
+	<div id="recalculate"  class="tab-pane" role="tabpanel">
+	  <p id="json_contents"></p>
+	  <button  onclick="recalculate()" type="button" class="btn btn-primary">Recalculate</button>
+	  <a id="download_csv" style="display:none" >Download polymerase stats</a>
+	  <ul id="download_movies"</ul>
+	  <button  onclick="get_bookmark()" type="button" class="btn btn-primary">Get Bookmark</button>
+	  <span id="bookmark_url"></span>
+	</div>
+	<div><input type="checkbox" checked id="pauser"> Animate</div>
+
+      </div>
+    </div>
+    
+    <script src="lib/jquery-3.4.1.min.js"></script>
+    <script src="lib/popper.min.js"></script>
+    <script src="lib/bootstrap.min.js"></script>
+    <script src="lib/bootstrap-tourist.js"></script>
+    <script src="tour.js"></script>
+    <script src="lib/d3.v5.min.js"></script>
+    <script src="lib/d3-queue.v3.min.js"></script>
+    <script>
+     /* Pages.start(window.location.href);*/
+     /* var Pages={id:"no-id-ea"}; */
+
+     var cartoon = d3.select("#cartoon"),
+	 cartoon_width = +cartoon.attr("width");
+     var n_iter=100;
+     var radius=4;
+     var cartoon_data;
+     var cartoon_ind=0;
+     var movie_ind=0;
+     var is_capturing=true;
+     var movie_timer;
+     var cartoon_timer;
+     var margin = {top: 20, right: 10, bottom: 20, left: 40};
+     var width = 500 - margin.left - margin.right,
+	 height = 400 - margin.top - margin.bottom;
+     var xscale = d3.scaleLinear().range([0, width]);
+     var yscale = d3.scaleLinear().range([height, 0]); 
+     var valueline = d3.line()
+		       .x((d,i) => xscale(i))
+		       .y(d => yscale(d/n_iter))
+		       .curve(d3.curveBasis);
+     var tscale;
+     var anim_data;
+     function ui_order(data) {
+	 var UI_order = ["initiation_period",
+			 "pol_N",
+			 "pause_site",
+			 "release_time",
+			 "pol_speed",
+			 "pol_size",
+			 "processivity",
+			 "uv_distance",
+			 "repair_half_life",
+			 "dissoc",
+			 "degrad",
+			 "gene_length",
+			 "complete_reuse_p",
+			 "run_length",
+			 "genome_prop",
+			 "speed_factor_t0",
+			 "tally_binsize",
+			 "tally_interval"
+	 ];
+	 return d3.entries(data).sort( (a,b) =>  UI_order.indexOf(a.key) - UI_order.indexOf(b.key));
+     }
+     function label(k) {
+	 var UI_names = {gene_length:"Gene Length",
+			 initiation_period:"Init. Period",
+			 uv_distance:"UV dist.",
+			 run_length:"Run time",
+			 pol_speed:"Speed of pols",
+			 pol_size:"Size of pols",
+			 repair_half_life:"Repair T½",
+			 processivity:"Processivity",
+			 dissoc:"Dissociation time",
+			 pause_site:"Pause location",
+			 release_time:"Pause dwell time",
+			 complete_reuse_p:"P(Reuse on completion)", 
+			 degrad:"Degradation time", 
+			 genome_prop:"Proportion in genome",
+			 pol_N:"Polymerase count",
+			 speed_factor_t0:"Speed factor",
+			 tally_binsize:"Bin Width",
+			 tally_interval:"Sampling interval"
+	 };
+	 if (UI_names.hasOwnProperty(k.key)) {
+	     return (UI_names[k.key]);
+	 } else {
+	     return (k.key);
+	 }
+     }
+     function tooltip(k) {
+	 var UI_tips = {gene_length:"Length of gene from start to completion in bases",
+			initiation_period:"Expected time between consecutive initiation attempts",
+			uv_distance:"Expected distance between UV damage sites, leave blank for no damage",
+			run_length:"How long after damage to monitor polymerase positions",
+			pol_speed:"Speed of freely moving polymerases",
+			pol_size:"Number of bases a polymerase occupies",
+			repair_half_life:"The amount of time we'd expect for half the damage sites to be repaired",
+			processivity:"Expected amount of time since initiation that an active polymerase can remain on a gene",
+			dissoc:"Expected cumulative amount of time a polymerase can spend stalled before being removed by dissociation and returned to polymerase pool",
+			pause_site:"Number of bases from TSS where polymerases will pause",
+			release_time:"Length of time paused polymerases will be stalled for",
+			complete_reuse_p:"If a polymerase achieves full length transcription, the probability that it will be made available for initiation again", 
+			degrad:"Expected cumulative amount of time a polymerase can spend stalled before being removed by degraded, not to return to polymerase pool", 
+			genome_prop:"What proportion of genes in the genome are represented by this set of parameters",
+			pol_N:"Number of polymerases available per gene for initiation immediately prior to UV damage",
+			speed_factor_t0:"By what factor do polymerase speeds change immediately upon damage",
+			tally_binsize:"Size of bins in which to chop gene for purposes of counting polymerases",
+			tally_interval:"Time between counting of polymerases across gene length",
+			Type:"Whether we count all polymerases, or just moving ones"
+	 };
+	 if (UI_tips.hasOwnProperty(k.key)) {
+	     return (UI_tips[k.key]);
+	 } else {
+	     return (k.key);
+	 }
+     }
+     
+     function pos_to_xy(pos) {
+	 var diam=2*radius;
+	 var bin = pos/33;
+	 var nx = Math.floor(cartoon_width/diam-1);
+	 var y = (diam+2) * Math.floor(bin/nx)+diam;
+	 //     x = diam * (nx - Math.abs(bin % (2*nx) - nx))+radius;
+	 var x = diam * (bin % nx);
+	 return {x:x, y:y};
+     }
+     function xyi(pos, id) {
+	 return pos.map(function(p, i) {var xy=pos_to_xy(p); return {x:xy.x, y:xy.y, id:id[i], pos:p};});
+     }
+     function format_hms(num) {
+	 var h = Math.floor( num / 3600 );
+	 var m = Math.floor((num - h * 3600) / 60 );
+	 var s = Math.floor(num - (h * 3600 + m * 60));
+	 return ( h < 10 ? "0" + h : h ) + ":" + ( m < 10 ? "0" + m : m ) + ":" + ( s < 10 ? "0" + s : s );
+     }
+
+     function I(d) {return d;}
+     
+     function update_cartoon(data) {
+	 update_movie(Math.floor(cartoon_data.pols[cartoon_ind].time/cartoon_data.params.tally_interval)+1);
+	 var pols = cartoon.selectAll("circle")
+			   .data(data, d => d.id);
+	 var t500 = d3.transition()
+		      .duration(500).ease(d3.easeLinear);
+	 pols.exit() 
+	     .attr("class", "exit")
+	     .transition(t500)
+	     .attr("cy", 380)
+	     .attr("cx", d => d.pos*cartoon_width/cartoon_data.params.gene_length)
+	     .style("fill-opacity", 1e-1);
+	 // ENTER new elements present in new data.
+	 pols.enter().append("circle")
+	     .attr("r", radius)
+	     .style("fill-opacity", 1)
+	     .merge(pols)// and update
+	     .attr("cy", d => d.y)
+	     .attr("cx", d => d.x);
+	 cartoon.selectAll("rect")
+		.attr("class", function(d, i) {
+		    return (cartoon_data.pols[cartoon_ind].time>cartoon_data.repair[i])?"repaired_damage":"active_damage";});
+	 d3.select("#time_slider").property("value", cartoon_ind);
+     }
+
+     function update_movie(ti) {
+	 d3.select("#movie").selectAll(".pol_movie").attr("d", d => valueline(d[ti]));
+     }
+     
+     function update_movies(ti) {
+	 d3.select("#scenarios").selectAll("svg")
+	   .selectAll("path.pol_path").filter(d => ti<d.length)
+	   .attr("d",d => valueline(d[ti]));
+	 d3.select("#genes").selectAll("svg")
+	   .selectAll("path.pol_path").filter(d => ti<d.length)
+	   .attr("d", d => valueline(d[ti]));
+	 if (is_capturing) {
+	     d3.select("#scenarios").selectAll("svg")
+	       .each(record_frame);
+	     d3.select("#genes").selectAll("svg")
+	       .each(record_frame);
+	 }
+	 d3.selectAll('.movie_timer').text(format_hms(ti*tscale));
+     }
+
+     /* Functions for creating webms */
+     var queues;
+     function record_frame(d,i) {
+	 queues.find(q => q.name==d.name.Value).q.defer(drawFrame, this);
+     }
+     function drawFrame(svg, cb) {
+	 var oDOM = svg.cloneNode(true);
+	 read_Element(oDOM, svg);
+	 var img = new Image(),
+	     serialized = new XMLSerializer().serializeToString(oDOM),
+	     url = URL.createObjectURL(new Blob([serialized], {type: "image/svg+xml"}));
+	 img.onload = function(){
+	     cb(null, img); //signals to queuer that 'img' is to be pushed onto queue
+	 };
+	 img.src = url;
+     }	 
+     var ContainerElements = ["svg","g"];
+     var RelevantStyles = {"rect":["fill","stroke","stroke-width"],
+			   "path":["fill","stroke","stroke-width"],
+			   "circle":["fill","stroke","stroke-width"],
+			   "line":["stroke","stroke-width"],
+			   "text":["fill","font-size","text-anchor"],
+			   "polygon":["stroke","fill"]};
+     function read_Element(ParentNode, OrigData){
+	 var Children = ParentNode.childNodes;
+	 var OrigChildDat = OrigData.childNodes;     
+	 for (var cd = 0; cd < Children.length; cd++){
+	     var Child = Children[cd];
+	     var TagName = Child.tagName;
+	     if (ContainerElements.indexOf(TagName) != -1){
+		 read_Element(Child, OrigChildDat[cd]);
+	     } else if (TagName in RelevantStyles){
+		 var StyleDef = window.getComputedStyle(OrigChildDat[cd]);
+		 var StyleString = "";
+		 for (var st = 0; st < RelevantStyles[TagName].length; st++){
+		     StyleString += RelevantStyles[TagName][st] + ":" + StyleDef.getPropertyValue(RelevantStyles[TagName][st]) + "; ";
+		 }
+		 Child.setAttribute("style",StyleString);
+	     }
+	 }
+	 
+     }
+     function generate_webms() {
+	 d3.selectAll(".download_movies").remove();
+	 queues.forEach(function(queue_obj) {
+	     var queue=queue_obj.q;
+	     var canvas4webm = document.createElement("canvas");
+	     canvas4webm.width = width + margin.left + margin.right;
+	     canvas4webm.height = height + margin.top + margin.bottom;
+	     var webm=[];
+	     var context4webm = canvas4webm.getContext("2d");
+	     var stream = canvas4webm.captureStream();
+	     var recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+	     recorder.ondataavailable = function(event) {
+		 if (event.data && event.data.size) {
+		     webm.push(event.data);
+		 }
+	     };
+	     recorder.onstop = function() {
+		 var url = URL.createObjectURL(new Blob(webm, { type: "video/webm" }));
+		 d3.select("#download_movies")
+		   .append("li")
+		   .append("a")
+		   .attr("href", url)
+		   .attr("download", queue_obj.name + ".webm")
+		   .text("Movie for " +queue_obj.section + " " + queue_obj.name);
+	     };
+	     queue.awaitAll(function(err, frames){
+		 var reps=0;
+		 recorder.start();
+		 drawFrame();
+		 function drawFrame() {
+		     if (frames.length) {
+			 if (reps==0) {
+			     context4webm.clearRect(0,0,width + margin.left + margin.right,height + margin.top + margin.bottom);
+			     context4webm.drawImage(frames.shift(), 0, 0,
+						    width + margin.left + margin.right,height + margin.top + margin.bottom);
+			     reps=5;
+			 }
+			 reps=reps-1;
+			 requestAnimationFrame(drawFrame);
+		     } else {
+			 recorder.stop();
+		     }
+		 }
+	     });
+	 });
+     }
+     
+     function show_damage(data) {
+	 var rect=cartoon.selectAll("rect")
+			 .data(data);
+	 rect.enter().append("rect")
+     	     .attr("class", "active_damage")
+	     .attr("width", radius).attr("height", 2*radius)
+	     .merge(rect)
+	     .attr("y", d => pos_to_xy(d).y).attr("x", d => pos_to_xy(d).x);
+	 rect.exit().remove();
+	 var line=cartoon.selectAll("line")
+			 .data(data);
+	 line.enter().append("line")
+	     .attr("stroke","black")
+	     .attr("y1", 380).attr("y2", 380+radius)
+	     .merge(line)
+	     .attr("x1", d => d*cartoon_width/cartoon_data.params.gene_length)
+	     .attr("x2", d => d*cartoon_width/cartoon_data.params.gene_length);
+	 line.exit().remove();
+     }
+     function add_radio(d) {
+	 var row=d3.select(this);
+	 var options = d.value.Unit.split("|");
+	 var buttons=row.selectAll("span").data(options);
+	 buttons.exit().remove();
+	 var b=buttons.enter()
+		      .append("span").attr("class","col-form-label")
+		      .merge(buttons);
+	 b.append("input").attr("type","radio")
+	  .attr("name", d.key)
+	  .property("checked", (dat,i) => i==d.value.Value)
+	  .attr("value",(d,i) => i);
+	 b.append("span").text(I);
+	 row.selectAll("input").on("change", function(dat,i) {d.value.Value = i;warn_recalc();});
+     }
+     function show_form(node, data) {
+	 var all_rows = node.selectAll('div')
+			    .data(data, d => d.key);
+	 all_rows.exit().remove();
+	 var rows = all_rows
+	     .enter().filter(d => d.value.Unit!="NA" & d.key!="name" & d.key!="colour")
+	     .append('div').attr("class", "row");
+	 rows.append('label')
+	     .attr("class", "col-4 col-form-label")
+	     .style("text-align","right")
+	     .text(label)
+	     .attr("title",tooltip);
+	 rows.filter(d => d.value.Unit.includes("|")).each(add_radio);
+	 rows.filter(d => !d.value.Unit.includes("|")).append("input")
+	     .attr("class", "form-control col-4")
+	     .attr("value", d=>d.value.Value)
+	     .on("input", function(d,i){
+		 d.value.Value = (this.value==null | this.value=="")?null:+this.value;
+	     	 warn_recalc();
+	     });
+	 rows.filter(d => !d.value.Unit.includes("|")).append("span")
+	     .text(d=> d.value.Unit);
+     }
+     function warn_recalc () {
+	 d3.selectAll(".progress-bar").text("Charts do not reflect current settings. Recalculate when you've made all required changes.").style("width", "100%").style("background-color","#dc3545 ");
+     }
+     function recalculate() {
+	 cartoon_timer.stop();
+	 movie_timer.stop();
+	 $('#waitModal').modal('show');
+	 $("#bookmark_url").text("");
+	 ws = new WebSocket("./ws");
+	 ws.onmessage = (event) => {
+             const data = JSON.parse(event.data);
+	     progress(data.scen, data.i)
+	 };
+	 ws.onopen = function(event) {
+             setInterval(function() {
+		 const message = "Progress";
+		 ws.send(message);
+             }, 2000);
+	 };
+	 ws.onclose = () => console.log("WebSocket closed");
+	 
+	 d3.json("recalculate.json", {
+	     method: "POST",
+	     body: JSON.stringify({"scenarios":anim_data.scenarios, "genes": anim_data.genes, "default": anim_data.default, "id":"fake-id"}),
+	     headers: {"Content-type": "application/json; charset=UTF-8"}
+	 }).then(show_movies).then(() => ws.close());
+     }
+     function get_bookmark() {
+	 d3.json("get_bookmark.json", {
+	     method: "POST",
+	     body: JSON.stringify({"scenarios":anim_data.scenarios, "genes": anim_data.genes, "default": anim_data.default, "id":"fake-id", "bookmark":""}),
+	     headers: {"Content-type": "application/json; charset=UTF-8"}
+	 }).then(show_bookmark);
+     }
+     function show_bookmark(bookmark) {
+	 document.getElementById("bookmark_url").textContent=window.location.href.split('?')[0] + "?bookmark=" + bookmark.bookmark;
+     }
+     function progress(task, n) {
+	 var col = anim_data.scenarios.filter(d => d.name.Value==task)[0].colour.Value;
+	 d3.selectAll(".progress-bar").text(task).style("width",   n + "%").style("background-color",col);
+     }
+     function show_repair(data) {
+	 var rows = d3.select("#repair").selectAll('tr')
+		      .data(data);
+	 rows.exit().remove();
+	 var all_rows = rows.enter()
+			    .append('tr')
+			    .merge(rows);
+	 all_rows.filter(d => d>cartoon_data.params.run_length)
+		 .attr("class", "text-muted");
+	 var filled_rows = all_rows.selectAll('td')
+				   .data((d,i) => [{val:cartoon_data.damage[i], raw:i},{val:format_hms(d), raw:d}]);
+	 filled_rows
+	     .enter().append('td')
+	     .merge(filled_rows)
+	     .text(d => d.val)
+	     .attr("onclick", function(d,i) {return (i==1)?"set_time(" + (d.raw-15) + ")":"highlight_site(" + (d.raw) +")";});
+     }
+
+     function build_dropdown(node, data, cl) {
+	 var d1=node.selectAll("div.dropdown").data([1])
+		    .enter().append("div").attr("class","dropdown");
+	 d1.append("button")
+	   .attr("class","btn btn-secondary dropdown-toggle")
+	   .attr("type","button")
+	   .attr("data-toggle","dropdown")
+	   .text("New Parameter");
+	 var d2=d1.append("div")
+		  .attr("class","dropdown-menu");
+	 d2.selectAll("a")
+	   .data(data.filter(d => d.value.Unit != "NA"))
+	   .enter().append("a")
+	   .attr("class","dropdown-item "+cl)
+	   .text(label)
+	   .on("click", add_field);
+     }
+     function add_field(d) {
+	 var form_rows ;
+	 // var myobj = {};
+	 // myobj[d.key]=d.value;
+	 if (d3.select(this).classed("scenario")) {
+	     form_rows= d3.select("#scene-cards").selectAll("div.card-wrap").selectAll("form");
+	     if (d.key in anim_data.scenarios[0]) {
+		 anim_data.scenarios.forEach(sc => delete(sc[d.key]));
+	     } else {
+		 anim_data.scenarios = anim_data.scenarios.map(sc => Object.assign(sc,{[d.key]:{Value:d.value.Value, Unit:d.value.Unit}}));
+	     }
+	     show_form(form_rows,(d2,i) => d3.entries(anim_data.scenarios[i]));
+	 } else {
+	     form_rows= d3.select("#gene-cards").selectAll("div.card-wrap").selectAll("form");
+	     if (d.key in anim_data.genes[0]) {
+		 anim_data.scenarios.forEach(g => delete(g[d.key]));
+	     } else {
+		 anim_data.genes = anim_data.genes.map(g => Object.assign(g,{[d.key]:{Value:d.value.Value, Unit:d.value.Unit}}));
+	     }
+	     show_form(form_rows,(d2,i) => d3.entries(anim_data.genes[i]));
+	 }
+     }
+     
+     function build_new_card(wrap) {
+	 var card = wrap.append("div").attr("class","card");
+	 var head = card
+	     .append("div").attr("class", "card-title")
+	     .style("color","white")
+	     .append("div").attr("class", "row");
+	 head
+	     .append("input").attr("type", "text")
+	     .attr("class", "form-control-plaintext col-9 form-title")
+	     .style("color", "white")
+	     .on("input", function(d){d.name.Value=this.value;});
+	 head
+	     .append("input").attr("type", "color")
+	     .attr("class", "col-2 picker")
+	     .on("input", function(d,i){d.colour.Value=this.value; show_movies();});
+	 head
+	     .append("span")
+	     .attr("class", "form-control-plaintext col-1")
+	     .attr("style","cursor:not-allowed")
+	     .html("&times;")
+	     .on("click", remove_card);
+	 show_form(card.append("form"),d => d3.entries(d));
+	 var svg=card
+	     .append("div").attr("class", "card-body")
+	     .append("svg")
+	     .attr("width",width + margin.left + margin.right).attr("height",height + margin.top + margin.bottom)
+	     .attr("class", "card-text");
+	 svg
+	     .append("rect").attr("width",width + margin.left + margin.right).attr("height",height + margin.top + margin.bottom).attr("fill", "#fff");
+	 svg
+	     .append("g")
+	     .attr("class","track-group")
+	     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+	 card.select(".track-group").append("g")
+	     .attr("transform", "translate(0," + height + ")")
+	     .call(d3.axisBottom(xscale));
+	 card.select(".track-group").append("g")
+	     .call(d3.axisLeft(yscale));
+	 svg.append("text").attr("x",420).attr("y", 40)
+	    .attr("class","movie_timer")
+            .text("0");
+         svg.append("text").attr("x", 480).attr("y", 60).attr("class","line_legend").attr("font-weight", "bold").attr("text-anchor", "end");
+     }
+     function remove_card(d) {
+	 var i;
+	 if (this.parentNode.parentNode.parentNode.parentNode.parentNode.id=="gene-cards") {
+	     i= d3.select("#gene-cards").selectAll(".card-wrap").data().findIndex(x=> x.name.Value==d.name.Value);
+	     anim_data.genes.splice(i,1);
+	     anim_data.data.forEach(x => x.splice(i,1));
+	 } else {
+	     i = d3.select("#scene-cards").selectAll(".card-wrap").data().findIndex(x=> x.name.Value==d.name.Value);
+	     anim_data.scenarios.splice(i,1);
+	     anim_data.data.splice(i,1);
+	 }
+	 show_movies();
+     }
+     function update_card(card, dat, annot_within) {
+	 card.style("border-color", (d) => d.colour.Value);
+	 card.select(".card-title").style("background-color", d => d.colour.Value);
+	 card.select(".picker").property("value", d => d.colour.Value);
+	 card.select(".form-title").attr("value",d => d.name.Value);
+	 var paths=card.select("g.track-group").selectAll("path.pol_path")
+		       .data((d,i) => dat[i]);
+	 paths.exit().remove();
+	 paths.enter().append("path")
+	      .attr("class","pol_path")
+	      .merge(paths)
+	      .attr("stroke", (d,i) => annot_within[i].colour.Value)
+	      .attr("d", (d,i) => valueline(d[0]));
+	 var legend=card.select(".line_legend").selectAll("tspan")
+			.data((d,i)=> annot_within);
+	 legend.exit().remove();
+	 legend.enter().append("tspan").merge(legend)
+	       .text( (d,i)=>d.name.Value)
+	       .attr("fill", (d,i)=>d.colour.Value)
+	       .attr("dy", (d,i)=>20).attr("x", 480);
+     }
+
+     const maxer = (accumulator, currentValue) => Math.max(accumulator, currentValue);
+
+     function set_time(v) {
+	 ind=0;
+	 while (cartoon_data.pols[ind].time < v) {
+	     ind++;
+	 }
+	 cartoon_ind=ind;
+	 cartoon.selectAll("circle").filter(".exit").remove();
+     }
+     function highlight_site(ind) {
+	 d3.selectAll("rect").filter((d,i) => i==ind)
+	   .transition().attr("height", radius*4).attr("width", radius*2)
+	   .transition().attr("height", radius*2).attr("width", radius);
+     }
+     function clone_card(obj, add) {
+	 copy = {};
+	 for (var attr in obj) {
+	     if (obj.hasOwnProperty(attr)) copy[attr] = {Value:obj[attr].Value, Unit:obj[attr].Unit};
+	 }
+	 return Object.assign(copy, add);
+     }
+
+     d3.select('#add-scene')
+       .on('click', function(d, i) {
+	   copy = {};
+	   anim_data.scenarios.push(clone_card(anim_data.scenarios[0],
+					       {name:{Value:"New", Unit:"NA"}, colour:{Value:"#000000", Unit:"NA"}}));
+	   var card = d3.select("#scene-cards").selectAll("div.card-wrap")
+			.data(anim_data.scenarios);
+	   card.enter().append("div").attr("class","col-xl-6 card-wrap")
+	       .call(build_new_card)
+	       .call(update_card, [[0]], anim_data.genes);
+       });
+     d3.select('#add-gene')
+       .on('click', function(d, i) {	
+	   anim_data.genes.push(clone_card(anim_data.genes[0],
+					   {name:{Value:"New", Unit:"NA"}, colour:{Value:"#000000", Unit:"NA"}}));
+	   var card = d3.select("#gene-cards").selectAll("div.card-wrap")
+			.data(anim_data.genes);
+	   card.enter().append("div").attr("class","col-xl-6 card-wrap")
+	       .call(build_new_card)
+	       .call(update_card, [[0]], anim_data.scenarios);
+       });
+     function load_cartoon(d) {
+         $('#waitModal').modal('hide');
+	 d3.selectAll(".progress-bar").text("Completed").style("width", "100%").style("background-color","#e9ecef");
+         $('#waitText').html('<p>The simulation is running. The calculations and the simulation itself can take <b>several minutes</b> to complete. Please be patient - there is a progress bar at the top of each page in addition to here.</p><div class="progress"><div class="progress-bar"></div></div>');
+	 if (!document.cookie.includes("visited=yes")) {
+	     tour.restart();
+	     document.cookie="visited=yes";
+	 }
+	 cartoon_ind=1;
+	 cartoon_data=d;
+	 cartoon.selectAll("circle").data([]).exit().remove();
+	 show_damage(d.damage);
+	 show_repair(d.repair);
+	 update_cartoon(xyi(cartoon_data.pols[cartoon_ind].position, cartoon_data.pols[cartoon_ind].id));
+	 d3.select("#time_slider").property("max", cartoon_data.params.run_length);
+	 cartoon_timer = d3.interval(function() {
+	     update_cartoon(xyi(cartoon_data.pols[cartoon_ind].position, cartoon_data.pols[cartoon_ind].id))
+	     d3.select("#timer").text(format_hms(cartoon_data.pols[cartoon_ind].time));
+	     cartoon_ind = (cartoon_ind+1) % cartoon_data.pols.length;}, 1);
+     }
+     function show_summary_movie() {
+	 var all_movie_scenarios =  d3.select("#movie").selectAll("g")
+				      .data(anim_data.data);
+	 all_movie_scenarios.exit().remove();
+	 var all_tracks = all_movie_scenarios
+	     .enter().append("g")
+	     .merge(all_movie_scenarios)
+	     .attr("stroke",(d,i) => anim_data.scenarios[i].colour.Value)
+	     .selectAll("path")
+	     .data(I);
+	 all_tracks.exit().remove();
+	 all_tracks
+	     .enter().append("path")
+	     .attr("class", "pol_movie")
+	     .merge(all_tracks)
+	     .attr("d", d => valueline(d[1]));
+     }
+     function param_format(p, obj) {
+	 var str="";
+	 var val;
+	 if (obj[p].Unit!="NA") {
+	     val = (obj[p].Value===null) ? "Inf " : obj[p].Value;
+	     val +=  obj[p].Unit;
+	     val = (obj[p].Unit.includes("|")) ? obj[p].Unit.split("|")[obj[p].Value] : val;
+	     str=label({key:p}) + "," +  val  + "\n";
+	 }
+	 return(str);
+     }
+     function exportCSV(p) {
+	 var hist=p.history;
+	 var str = '';
+	 for (var cell in hist) {
+	     for (var scenario in hist[cell]) {
+		 for (var ev in hist[cell][scenario]) {
+		     str += `${cell},${scenario},${ev},${hist[cell][scenario][ev]}\n`;
+		 }
+	     }
+	 }
+	 str += `\nSCENARIOS\n`;
+	 p.scenarios.forEach(function(scen){
+	     str += `${scen.name.Value}\n`;
+	     for (var param in scen) {
+		 str += param_format(param, scen);
+	     }
+	 });
+	 str += `\nGENES\n`;
+	 p.genes.forEach(function(gene){
+	     str += `${gene.name.Value}\n`;
+	     for (var param in gene) {
+		 str += param_format(param, gene);
+	     }
+	 });
+	 str += `\nGLOBAL\n`;
+	 for (var param in p.default) {
+	     str += param_format(param, p.default);
+	 }
+	 var blob = new Blob([str], { type: 'text/csv;charset=utf-8;' });
+	 if (navigator.msSaveBlob) { // IE 10+
+	     navigator.msSaveBlob(blob, exportedFilenmae);
+	 } else {
+	     var link = document.getElementById('download_csv');
+	     if (link.download !== undefined) { // feature detection
+		 // Browsers that support HTML5 download attribute
+		 var url = URL.createObjectURL(blob);
+		 link.setAttribute("href", url);
+		 link.setAttribute("download", "uv_damage.csv");
+		 link.style.display = "block";
+	     }
+	 }
+     }
+     var urlParams = new URLSearchParams(window.location.search);
+     $('#waitModal').modal('show');
+     if (urlParams.get("bookmark")==null) {
+	 d3.json("anim_file.json").then(show_movies); 
+     } else {
+	 d3.json("recalculate.json", {
+	     method: "POST",
+	     body: JSON.stringify({"bookmark":urlParams.get("bookmark"), "id":"fake-id"}),
+	     headers: {"Content-type": "application/json; charset=UTF-8"}
+	 }).then(show_movies);
+     }
+     function show_movies(anim) {
+	 
+	 if (typeof movie_timer !== 'undefined') {
+	     movie_timer.stop();
+	 }
+	 if (typeof cartoon_timer !== 'undefined') {
+	     cartoon_timer.stop();
+	 }
+
+	 if (typeof anim !== "undefined") {
+	     if (typeof anim_data =="undefined" ) {
+		 anim_data=anim;
+	     } else {
+		 anim_data.data=anim.data;
+		 anim_data.history=anim.history;
+		 anim_data.cartoons=anim.cartoons;
+	     }
+	     if (anim.hasOwnProperty('history')) {
+		 exportCSV(anim);
+	     }
+	     if (anim.hasOwnProperty('cartoons')) {
+		 var opts = d3.select("#cartoon_selector").selectAll("option").data(d3.keys(anim.cartoons));
+		 opts.exit().remove();
+		 opts.enter().append("option")
+		     .merge(opts)
+		     .attr("value", I).text(I);
+		 d3.select("#cartoon_selector").on("change", function(d) {load_cartoon(anim.cartoons[this.value]);});
+		 load_cartoon(anim.cartoons[anim_data["scenarios"][0].name.Value]);
+	     } else {
+		 d3.json("test.json").then(load_cartoon);
+	     }
+	 }
+	 show_form(d3.select("#params_form"), ui_order(anim_data.default));
+	 show_summary_movie();
+	 var maxy=anim_data.data.map(z => z.map(y => y.map(x => x.reduce(maxer)).reduce(maxer)).reduce(maxer)).reduce(maxer);
+	 var maxx = anim_data.data.map(y => y.map(x => x[1].length).reduce(maxer)).reduce(maxer)
+	 xscale.domain([0, maxx]);
+	 yscale.domain([0, maxy/n_iter]);
+	 var maxti = anim_data.data[0][0].length;
+	 is_capturing = true;
+	 movie_ind=0;
+	 tscale = anim_data.default.tally_interval.Value;
+	 // Scenario cards
+	 var cards = d3.select("#scene-cards").selectAll("div.card-wrap")
+		       .data(anim_data.scenarios, d => d.name.Value);
+	 cards.exit().remove();
+	 cards.enter().append("div").attr("class","col-xl-6 card-wrap")
+	      .call(build_new_card)
+	      .merge(cards)
+	      .call(update_card, anim_data.data, anim_data.genes);
+	 build_dropdown(d3.select("#scene-footer"),ui_order(anim_data.default), "scenario");
+	 queues=anim_data.scenarios.map(scen =>( {name:scen.name.Value, q:d3.queue(1), section:"scenario"}));
+	 // Gene Cards
+	 cards = d3.select("#gene-cards").selectAll("div.card-wrap")
+		   .data(anim_data.genes, d => d.name.Value);
+	 cards.exit().remove();
+	 cards.enter().append("div").attr("class","col-xl-6 card-wrap")
+	      .call(build_new_card)
+	      .merge(cards)
+	      .call(update_card, d3.transpose(anim_data.data), anim_data.scenarios);
+	 build_dropdown(d3.select("#gene-footer"),ui_order(anim_data.default), "gene");
+	 queues=queues.concat(anim_data.genes.map(g =>( {name:g.name.Value, q:d3.queue(1), section:"gene"})));
+	 movie_timer=d3.interval(function() {
+	     if (d3.select("#pauser").property("checked")) {
+		 update_movies(movie_ind);
+		 movie_ind = (movie_ind+1) % maxti;
+		 if (is_capturing && (movie_ind==0)) { // ie we've done a complete video loop
+		     generate_webms();
+		     is_capturing=false;
+		 }
+	     }
+	 }, 400);
+     };
+    </script>
+  </body>
+</html>

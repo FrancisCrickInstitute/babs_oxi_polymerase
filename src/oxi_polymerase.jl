@@ -7,9 +7,9 @@ using DataFrames
 using CSV
 using Random
 using JSON
-using Pages#master
+using Oxygen
 using HTTP
-
+using HTTP.WebSockets
 
 include("cell_settings.jl")
 include("types.jl")
@@ -132,6 +132,8 @@ end
 
 # ** Run Simulations
 bookmarks = Dict{String, String}()
+progress = Dict{String, String}
+
 
 function main()
     main(scenarios, cell, vars)
@@ -171,9 +173,7 @@ function main(scenarios::Array{Dict{String, Any},1}, cell::Array{Dict{String, An
         for i=1:n_iter
             print(scenario["name"], "_", task_id, "_", i, "\n")
 	    scen = scenario["name"]
-            if client_id!=""
-	        Pages.message("/oxi_polymerase", client_id, "script", "progress(\"$scen\",\"$i\")")
-            end
+            global progress =Dict("scen" => scen, "i" => i)
             Random.seed!(i - 1 + task_id*n_iter);
             (genes,ss,cartoon_data)=simulate(myvars, cell, record=i==1)
             if (i==1)
