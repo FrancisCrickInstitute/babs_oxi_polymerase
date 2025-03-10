@@ -5,7 +5,7 @@
     <link rel="stylesheet" href="lib/bootstrap.min.css" >
     <link rel="stylesheet" href="lib/bootstrap-tourist.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <title>Damage Repair Simulation</title>
+    <title>Polymerase Simulation</title>
     <style>
      .exit {
 	 fill: brown;
@@ -47,7 +47,7 @@
     </div>
     <div class="container-fluid" >
       <h1 class="display-3 p-3 border"  style="background-color:#82c9f0;">
-	Transcription during DNA Damage Simulation
+	Transcription Simulation
 	<button type="button" class="btn btn-info btn-lg" id="tour-button" onclick="tour.restart()">Click for a guided tour</button></h1>
       <div class="progress"><div class="progress-bar"></div></div>
       <ul class="nav nav-tabs" role="tablist" >
@@ -213,8 +213,8 @@
 			complete_reuse_p:"If a polymerase achieves full length transcription, the probability that it will be made available for initiation again", 
 			degrad:"Expected cumulative amount of time a polymerase can spend stalled before being removed by degraded, not to return to polymerase pool", 
 			genome_prop:"What proportion of genes in the genome are represented by this set of parameters",
-			pol_N:"Number of polymerases available per gene for initiation immediately prior to UV damage",
-			speed_factor_t0:"By what factor do polymerase speeds change immediately upon damage",
+			pol_N:"Number of polymerases available per gene for initiation at steady state",
+			speed_factor_t0:"By what factor do polymerase speeds change at t=0 (straight after steady state)",
 			tally_binsize:"Size of bins in which to chop gene for purposes of counting polymerases",
 			tally_interval:"Time between counting of polymerases across gene length",
 			Type:"Whether we count all polymerases, or just moving ones"
@@ -744,7 +744,7 @@
 		 // Browsers that support HTML5 download attribute
 		 var url = URL.createObjectURL(blob);
 		 link.setAttribute("href", url);
-		 link.setAttribute("download", "uv_damage.csv");
+		 link.setAttribute("download", "polymerase.csv");
 		 link.style.display = "block";
 	     }
 	 }
