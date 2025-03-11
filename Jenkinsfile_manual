@@ -1,0 +1,138 @@
+def getCorrectImageTag(IMAGE_TAG) {
+    if (IMAGE_TAG == '') {
+        return env.GIT_COMMIT
+    }
+    else {
+        return IMAGE_TAG
+    }
+}
+
+def getEnvironmentFromBranch(BRANCH) {
+    if (BRANCH == 'main') {
+        return 'prod'
+    }
+    else {
+        return 'dev'
+    }
+}
+
+def getKubeConfigCredFromEnvironment(ENVIRONMENT) {
+    if (ENVIRONMENT == 'dev') {
+        return "k8-creds-admin-rancher-staging-01"
+    }
+    else if (ENVIRONMENT == 'prod') {
+        return "k8-creds-admin-rancher-production-01"
+    }
+}
+
+def getDeploymentDateTime() {
+    return String.format('%tF %<tH:%<tM:%<tS', java.time.LocalDateTime.now())
+}
+
+
+pipeline {
+
+    agent {
+        node {
+            label 'kubernetes'
+        }
+    }
+
+    parameters {
+        string(name: 'FORM_IMAGE_TAG', defaultValue: '', description: 'Container image tag', trim: true)
+        booleanParam(name: 'BUILD_IMAGE', defaultValue: false, description: 'Build the container image? Only runs with develop branch')
+        booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Deploy to Kubernetes?')
+    }
+
+    environment {
+        ENVIRONMENT = getEnvironmentFromBranch(env.BRANCH_NAME)
+        KUBECONFIGCRED = getKubeConfigCredFromEnvironment(ENVIRONMENT)
+        ENVFILECRED = "k8s-${ENVIRONMENT}-babs-inspec-env-file"
+
+        IMAGE_TAG = getCorrectImageTag(FORM_IMAGE_TAG)
+
+        DOCKERHUB_REGISTRY = credentials('k8s-dockerhub-registry-data-field')
+        DOCKERHUB_CRED = 'docker-hub'
+
+        DOCKERHUB_REPO = 'thecrick/babs-oxi-polymerase'
+        DOCKERHUB_REPO_TAG = "${DOCKERHUB_REPO}:${IMAGE_TAG}"
+        DOCKERHUB_REPO_LATEST = "${DOCKERHUB_REPO}:latest"
+
+        KUBEFILE = 'kubeconf.yaml'
+
+        KUBEDIR = 'kubernetes'
+        BASEFILE = "${KUBEDIR}/base/kube.yaml"
+        BASEKUSTOMFILE = "${KUBEDIR}/base/kustomization.yaml"
+        OVERLAY = "${KUBEDIR}/${BRANCH_NAME}"
+
+        ENVFILE = "${OVERLAY}/.env"
+        
+        DEPLOYMENT_DATETIME = getDeploymentDateTime()
+    }
+
+    stages {
+        stage('Build and push Docker image') {
+            when {
+                environment name: 'ENVIRONMENT', value: 'dev'
+                expression {
+                    return params.BUILD_IMAGE.toBoolean()
+                }
+            }
+            steps {
+                script {
+                    dockerImage = docker.build(DOCKERHUB_REPO_TAG)
+                    docker.withRegistry('', DOCKERHUB_CRED) {
+                        dockerImage.push()
+                        dockerImage.push('latest')
+                    }
+                }
+                sh "docker rmi ${DOCKERHUB_REPO_TAG} ${DOCKERHUB_REPO_LATEST}"
+            }
+        }
+
+        stage('Create Kubeconfig file') {
+            steps {
+                echo 'Creating ${ENVIRONMENT} kubeconfig file'
+                withCredentials([file(credentialsId: KUBECONFIGCRED, variable: 'KUBETEMP')]) {
+                    fileOperations([fileRenameOperation(source: KUBETEMP, destination: KUBEFILE)])
+                    echo "Kubeconfig file created"
+                }
+                
+                echo "Preparing kustomize in ${OVERLAY}"
+                withCredentials([
+                    file(credentialsId: ENVFILECRED, variable: 'ENVTEMP')
+                ]) {
+                    fileOperations([fileRenameOperation(source: ENVTEMP, destination: ENVFILE)])
+                    echo 'env file created'
+                }
+            }
+        }
+
+        stage('Insert values in base yaml') {
+            steps {
+                echo "Inserting values in ${BASEFILE}"
+                sh '''
+                    sed -i -e "s/insertDockerHubRegistryConfigHere/${DOCKERHUB_REGISTRY}/" ${BASEFILE}
+                    sed -i -e "s/insertImageTagHere/${IMAGE_TAG}/" ${BASEFILE}
+                    sed -i -e "s/insertBranchNameHere/${BRANCH_NAME}/g" ${BASEKUSTOMFILE}
+                    sed -i -e "s/insertImageTagHere/${IMAGE_TAG}/g" ${BASEKUSTOMFILE}
+                    sed -i -e "s/insertDeployDateTimeHere/${DEPLOYMENT_DATETIME}/g" ${BASEKUSTOMFILE}
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes Cluster') {
+            when {
+                expression {
+                    return params.DEPLOY_K8S.toBoolean()
+                }
+            }
+            steps {
+                echo "Deploying ${BASEFILE} and ${OVERLAY} to k8s cluster"
+                sh '''
+                    kubectl --kubeconfig=kubeconf.yaml apply -k ${OVERLAY}
+                '''
+            }
+        }
+    }
+}
