@@ -10,7 +10,7 @@ using JSON
 using Oxygen
 using HTTP
 using HTTP.WebSockets
-using Debugger
+
 
 include("cell_settings.jl")
 include("types.jl")
