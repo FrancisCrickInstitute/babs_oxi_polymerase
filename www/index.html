@@ -167,6 +167,8 @@
 			 "run_length",
 			 "genome_prop",
 			 "speed_factor_t0",
+			 "t0",
+			 "tend",
 			 "tally_binsize",
 			 "tally_interval"
 	 ];
@@ -189,6 +191,8 @@
 			 genome_prop:"Proportion in genome",
 			 pol_N:"Polymerase count",
 			 speed_factor_t0:"Speed factor",
+			 t0:"Time to apply speed factor",
+			 tend:"Time to revert to usual speed",
 			 tally_binsize:"Bin Width",
 			 tally_interval:"Sampling interval"
 	 };
@@ -214,7 +218,9 @@
 			degrad:"Expected cumulative amount of time a polymerase can spend stalled before being removed by degraded, not to return to polymerase pool", 
 			genome_prop:"What proportion of genes in the genome are represented by this set of parameters",
 			pol_N:"Number of polymerases available per gene for initiation at steady state",
-			speed_factor_t0:"By what factor do polymerase speeds change at t=0 (straight after steady state)",
+			speed_factor_t0:"By what factor do polymerase speeds change at t=t0 (==completely stop, 1=no change)",
+			t0:"When to apply speed-factor (seconds since steady-state achieved)",
+			t1:"When to remove speed-factor (seconds since steady-state achieved)",
 			tally_binsize:"Size of bins in which to chop gene for purposes of counting polymerases",
 			tally_interval:"Time between counting of polymerases across gene length",
 			Type:"Whether we count all polymerases, or just moving ones"

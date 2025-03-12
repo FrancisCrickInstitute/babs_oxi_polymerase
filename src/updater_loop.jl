@@ -40,6 +40,8 @@ function update_prior_times(gene::Gene, willelapse::Float64)
         end
     end
     gene.events.initiate.time[1] -= willelapse
+    gene.events.oxidise.time[1] -= willelapse
+    gene.events.deox.time[1] -= willelapse
     gene.events.pause.time[1] -= willelapse
     gene.events.complete.time[1] -= willelapse
     gene.events.release.time[1] -= willelapse
@@ -72,5 +74,9 @@ function update_speeds!(gene::Gene, ind::Int64)
               gene.pol_speed[i]=max(gene.default_speed, gene.pol_speed[i])
          end
     end
+    return nothing
+end
+
+function update_speeds!(gene::Gene)
     return nothing
 end

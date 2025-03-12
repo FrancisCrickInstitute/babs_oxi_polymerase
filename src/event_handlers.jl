@@ -111,6 +111,17 @@ function dissoc(gene::Gene, event::indexed_event, elapsed::Float64)
     return(nothing)
 end
 
+function oxidise(gene::Gene, event::indexed_event, elapsed::Float64)
+    gene.default_speed *= gene.vars["speed_factor_t0"]
+    gene.pol_speed .*= gene.vars["speed_factor_t0"]
+    gene.events.oxidise.time[1] = Inf
+end
+
+function deox(gene::Gene, event::indexed_event, elapsed::Float64)
+    gene.default_speed = gene.vars["pol_speed"]
+    gene.pol_speed .= gene.vars["pol_speed"]
+    gene.events.deox.time[1] = Inf
+end
 
 # *** Complete - remove pol, and record completion event
 function complete(gene::Gene, event::indexed_event, elapsed::Float64)

@@ -10,6 +10,7 @@ using JSON
 using Oxygen
 using HTTP
 using HTTP.WebSockets
+using Debugger
 
 include("cell_settings.jl")
 include("types.jl")
@@ -35,8 +36,13 @@ function steady_state!(gene::Gene)
     gene.pol_N = gene.vars["pol_N"] 
     ## Some events get decremented, even though we're not including them in the event loop
     gene.events.tally.time[1] = Float64(0)
+#     for x in correct_after_steady_state
+#         getfield(gene.events, x).time[1] += gene.time
+#     end
     gene.events.repair.time .+=  gene.time
     gene.events.block.time .+=  gene.time
+    gene.events.oxidise.time .+=  gene.time
+    gene.events.deox.time .+=  gene.time
     gene.time = 0.0
     ss = deepcopy(gene)
     ss.tally_matrix[:,1] .= counts(div.(floor.(Int, ss.pol_position.-1), ss.vars["tally_binsize"]), UnitRange(0,size(ss.tally_matrix,1)-1))
@@ -55,10 +61,6 @@ function simulate(v::Dict{String, Any}, cell; sim_time=v["run_length"], record=f
     io=IOBuffer()
     genes = [oxi_polymerase.Gene(merge(v,g)) for g in cell]
     ss = [oxi_polymerase.steady_state!(g) for g in genes]
-    for g in keys(genes)
-        genes[g].default_speed *= genes[g].vars["speed_factor_t0"]
-        genes[g].pol_speed .*= genes[g].vars["speed_factor_t0"]
-    end
     ntime=0
     time_left=sim_time
     time_to_next = [oxi_polymerase.nextEvent(g)[1] for g in genes]

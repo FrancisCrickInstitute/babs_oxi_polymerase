@@ -73,5 +73,7 @@ const time_handlers = Dict(
     :degrad => [block_t, bump_t, pause_t, complete_t],
     :complete => [block_t, bump_t, pause_t, complete_t],
     :repair => [block_t, bump_t, pause_t, complete_t],
+    :oxidise => [block_t, bump_t, pause_t, complete_t],
+    :deox => [block_t, bump_t, pause_t, complete_t],
     :tally => []
 )

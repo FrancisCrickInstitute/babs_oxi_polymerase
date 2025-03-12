@@ -25,7 +25,9 @@ const vars = Dict{String, Any}(
     "degrad"            => Inf,
     "pause_site"        => 60bp,
     "release_time"      => 3seconds,
-    "speed_factor_t0"   => 1.0, # Factor by which speed changes upon damagage
+    "speed_factor_t0"   => 1.0, # Factor by which speed changes at 't0'
+    "t0"                => Inf,   #Time at which speed changes
+    "tend"              => Inf,   #Time at which speed reverts
     "pol_N"             => 250, # Number of polymerases available initially for initiation
     "complete_reuse_p"  => 1, # Probability of transcript-complete pol re-entering pool
 #    "dropoff_reuse_p"   => 1, # Probability of incomplete-transcript pol re-entering pool
@@ -49,7 +51,9 @@ const var_units = Dict{String, String}(
     "degrad"            => "s",
     "pause_site"        => "bp",
     "release_time"      => "s",
-    "speed_factor_t0"   => "", 
+    "speed_factor_t0"   => "",
+    "t0"                => "s",
+    "tend"              => "s",
     "pol_N"             => "", 
     "complete_reuse_p"  => "", 
 #    "dropoff_reuse_p"   => "", 
@@ -61,10 +65,15 @@ const var_units = Dict{String, String}(
     "colour"            => ""
 )
 
+# const scenarios = [
+#     Dict("name"=>"no_degrad", "degrad" => vars["degrad"], "dissoc" => vars["dissoc"], "colour" => "#ffc000"),
+#     Dict("name"=>"degrad",    "degrad" => 14minutes,      "dissoc" => 33minutes,      "colour" => "#5b9bd5"),
+#     Dict("name"=>"pileup",    "degrad" => Inf,            "dissoc" => Inf,            "colour" => "#232b2b")
+# ]
+
 const scenarios = [
-    Dict("name"=>"no_degrad", "degrad" => vars["degrad"], "dissoc" => vars["dissoc"], "colour" => "#ffc000"),
-    Dict("name"=>"degrad",    "degrad" => 14minutes,      "dissoc" => 33minutes,      "colour" => "#5b9bd5"),
-    Dict("name"=>"pileup",    "degrad" => Inf,            "dissoc" => Inf,            "colour" => "#232b2b")
+    Dict("name"=>"oxid", "t0" => 10seconds, "tend" => 15seconds, "speed_factor_t0" => 0.1,  "colour" => "#ffc000"),
+    Dict("name"=>"ctrl", "t0" => Inf, "tend" => Inf, "speed_factor_t0" => 1.0, "colour" => "#232b2b")
 ]
 
 
